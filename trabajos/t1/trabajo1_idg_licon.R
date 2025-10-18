@@ -188,13 +188,34 @@ ggplot(df_indicadores, aes(x = ptje_ed_superior)) +
 
 
 # DIAGRAMA DE DISPERSIÓN
+modelo <- lm(ptje_ed_superior ~ ptje_mov_intercomunal, data = df_indicadores)
+r2 <- summary(modelo)$r.squared
+med_mir <- median(df_indicadores$ptje_mov_intercomunal, na.rm = TRUE)
+med_pes <- median(df_indicadores$ptje_ed_superior,       na.rm = TRUE)
 ggplot(df_indicadores, aes(x = ptje_mov_intercomunal, y = ptje_ed_superior)) +
-  geom_point(color = "steelblue") +
-  labs(title = 'Relación entre % MIR vs. % PES',
-       x = '% MIR',
-       y = '% PES') +
-theme_minimal()
-
+  stat_density_2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.15, colour = NA) +
+  scale_fill_viridis_c(guide = "none")+
+  geom_point(alpha = 0.6, size = 2, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "firebrick", linetype = "dashed", linewidth = 0.8) +
+  geom_vline(xintercept = med_mir, linetype = "dotted", color = "grey40") +
+  geom_hline(yintercept = med_pes, linetype = "dotted", color = "grey40") +
+  annotate("label",
+           x = quantile(df_indicadores$ptje_mov_intercomunal, 0.98, na.rm = TRUE),
+           y = quantile(df_indicadores$ptje_ed_superior,       0.98, na.rm = TRUE),
+           label = paste0("R² = ", round(r2, 2)),
+           size = 3, fill = "white", label.size = 0) +
+  scale_x_continuous(limits = c(0, 100)) +
+  scale_y_continuous(limits = c(0, 100)) +
+  labs(
+    title = "Relación entre % MIR vs. % PES",
+    x = "% MIR", y = "% PES",
+    caption = "Líneas punteadas: medianas de MIR y PES"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
 
 ################################################################################
 # 7. MAPAS UNIVARIADOS
@@ -206,11 +227,11 @@ ggplot() +
   geom_sf(data = sf_comunas, fill = NA, color = "black", size = 1) +
   geom_sf_text(data = sf_centroides, aes(label = nom_comuna),
                size = 3, fontface = "bold") +
-  scale_fill_distiller(palette = "BuPu", name = "% de Movilidad Intercomunal", direction = 1) +
+  scale_fill_distiller(palette = "BuGn", name = "% MIR", direction = 1) +
   theme_void() +
   theme(plot.title = element_text(hjust = 0.5, face = "bold"),
         plot.subtitle = element_text(hjust = 0.5)) +
-  labs(title = "% de Movilidad Intercomunal por zona censal",
+  labs(title = "% MIR por zona censal",
        subtitle = "Provincia de VALPARAÍSO")
 
 # MAPA % DE EDUCACIÓN SUPERIOR POR ZONA CENSAL
@@ -238,6 +259,8 @@ sf_mapa_bi = bi_class(
   style = "jenks"
 )
 
+# >>> línea mínima para evitar el error
+caja <- sf::st_bbox(sf_mapa_bi)   # también podría ser st_bbox(sf_comunas)
 
 mapa_bivariado = ggplot() +
   geom_sf(data = sf_mapa_bi, aes(fill = bi_class), color = NA, show.legend = FALSE) +
@@ -245,23 +268,24 @@ mapa_bivariado = ggplot() +
   geom_sf_text(data = sf_centroides, aes(label = nom_comuna),
                size = 3, fontface = "bold") +
   bi_scale_fill(pal = "DkBlue", dim = 3) +
-  coord_sf(xlim = c(caja['xmin'], caja['xmax']), ylim = c(caja['ymin'], caja['ymax']), expand = FALSE) +
+  coord_sf(xlim = c(caja['xmin'], caja['xmax']),
+           ylim = c(caja['ymin'], caja['ymax']),
+           expand = FALSE) +
   theme_void() +
   theme(plot.title = element_text(hjust = 0.5, face = "bold"),
         plot.subtitle = element_text(hjust = 0.5)) +
-  labs(title = "Mapa Bivariado: % de Movilidad Intercomunal vs % de Educación Superior",
+  labs(title = "Mapa Bivariado: % MIR vs % PES",
        subtitle = "Provincia de VALPARAÍSO")
-
 
 leyenda_bivariada = bi_legend(
   pal = "DkBlue", 
   dim = 3,
-  xlab = "% de Movilidad Intercomunal (bajo → alto)",
-  ylab = "% de Educación Superior (bajo → alto)",
+  xlab = "% MIR (bajo → alto)",
+  ylab = "% PES (bajo → alto)",
   size = 5
 )
 
-mapa_final = ggdraw() +
-  draw_plot(mapa_bivariado, x = 0,    y = 0,    width = 1,    height = 1) +
-  draw_plot(leyenda_bivariada,        x = 0.72, y = 0.05, width = 0.26, height = 0.26)
+mapa_final = cowplot::ggdraw() +
+  cowplot::draw_plot(mapa_bivariado, x = 0, y = 0, width = 1, height = 1) +
+  cowplot::draw_plot(leyenda_bivariada, x = 0.72, y = 0.05, width = 0.26, height = 0.26)
 print(mapa_final)
