@@ -246,7 +246,7 @@ La unidad de análisis de realizó a nivel de zona censal, la cual permite capta
 
 La elección se fundamenta principalmente en la capacidad para reflejar las variaciones internas dentro de cada comuna, especialmente en un territorio complejo con es la provincia de Valparaíso.
 
-Durante la etapa de preparación espacial, se identificó una problemática asociada a las zonas insulares pertenecientes a algunas comuna de la provincia. Si bien existe el caso de Rapa Nui y Juan Fernández, ambos casos insulares son comunas por si sola que se pueden filtrar rápidamente. Caso contrario ocurre con las Islas Salas y Gomez, las cuales pertenecen administrativamente al territorio continental de Valparaíso. Estas porciones, al ser geométricamente discontínuas y carentes de población censada, generaban interferencias en los procesos de intersección espacial y en la eventual visualización de los resultados cartográficos.
+Durante la etapa de preparación espacial, se identificó una problemática asociada a las zonas insulares pertenecientes a algunas comuna de la provincia. Si bien existe el caso de Rapa Nui y Juan Fernández, ambos casos insulares son comunas por si sola que se pueden filtrar rápidamente. Caso contrario ocurre con las Islas Salas y Gomez, las cuales pertenecen administrativamente al territorio continental de Valparaíso. Estas porciones, al ser geométricamente discontinuas y carentes de población censada, generaban interferencias en los procesos de intersección espacial y en la eventual visualización de los resultados cartográficos.
 
 Para abordar dicha situación, se implemento un filtro espacial mediante SQL, cuyo propósito principal fue mantener únicamente las partes continentales de cada comuna, seleccionado el polígono de mayor tamaño y excluyendo las zonas insulares.
 
@@ -322,8 +322,16 @@ sf_comunas = st_read(con, query = sql_comunas)
 
 sf_centroides = st_centroid(sf_comunas)
 ```
+:::
 
 ## 3.5 Visualización
+
+::: {style="text-align: justify;"}
+La visualización también se llevo a cabo en el entorno RStudio, utilizando principalmente las librerías `ggplot2`, `sf`, `biscale` y `cowplot`.
+
+El propósito fue representar gráficamente la relación entre la MIR y la PES, combinando enfoques estadísticos y geoespaciales.
+
+Para el estudio estadístico se realizaron histogramas por cada una de las variables, a la vez que se combinaron en un gráfico de dispersión para observar la tendencia. Luego se elaboraron cartografías para cada variable, mostrando espacialmente como se distribuyen estas, para finalizar con el mapa bivariado, aplicando una clasificación de tres categorías por variable (baja, media y alta) según el método de Jenks.
 :::
 
 # 4. Resultados y Análisis
