@@ -336,33 +336,71 @@ Para el estudio estadístico se realizaron histogramas por cada una de las varia
 
 # 4. Resultados y Análisis
 
+## 4.1 Resultados MIR
+
+::: {style="text-align: justify;"}
+El histograma para el % de movilidad intercomunal residencial muestra una distribución asimétrica hacia la derecha, con una concentración importante de zonas censales en torno al 10%. Esto indica que gran parte de las zonas de la provincia presentan niveles bajos de cambio de residencia entre comuna, lo que refleja cierta estabilidad poblacional o una baja atracción migratoria. Desde el 20%, la frecuencia disminuye progresivamente, indicando que son pocos los sectores que concentran alta movilidad residencial.
+
+Los valores elevados tienen a corresponder, por regla general, a las áreas urbanas y periféricas donde la oferta de vivienda nueva o de menor costo ha impulsado la llegada de nuevos pobladores. A su vez, la cola extendida del histograma sugiere la existencia de zonas con dinámicas residenciales más intensas, posiblemente asociadas a procesos de expansión urbana o de alta rotación de pobladores, como podrían ser los barrios universitarios.
+
+Se podría decir entonces que el % de movilidad intercomunal residencial evidencia una estructura territorial heterogénea, con dominio de zonas con baja movilidad intercomunal y la presencia puntual de áreas más activas en cuanto a estos movimientos.
+:::
+
 ```{r histograma var 1, echo=FALSE, message=FALSE, warning=FALSE}
-# HISTOGRAMA DISTRIBUCIÓN DEL % DE MOVILIDAD INTERCOMUNAL
 ggplot(df_indicadores, aes(x = ptje_mov_intercomunal)) +
-  geom_histogram(bins = 30, fill = '#226e6e', color = 'white') +
-  labs(title = 'Distribución del % de Movilidad Intercomunal',
-       x = '% de Movilidad Intercomunal',
-       y = 'Frecuencia')
+  geom_histogram(bins = 30, fill = '#226e6e', color = 'white', alpha = 0.9) +
+  geom_vline(aes(xintercept = mean(ptje_mov_intercomunal, na.rm = TRUE)),
+             color = "red", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = mean(df_indicadores$ptje_mov_intercomunal, na.rm = TRUE),
+           y = Inf, vjust = 2, label = "Media", color = "red",size = 3)+
+  labs(title = 'Distribución del % MIR', subtitle = 'Provincia de Valparaíso',
+       x = '% MIR',
+       y = 'Frecuencia') +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
 ```
 
+## 4.2 Resultados PES
+
+::: {style="text-align: justify;"}
+El porcentaje de población con educación superior muestra un histograma que, al igual que el anterior, presenta asimetría hacia la derecha, aunque menos pronunciada. Se observa una mayor dispersión de valores, con rangos que abarcan la mayoría de los porcentajes posibles.
+
+Las zonas de mayor frecuencia se concentra cercanas al 20% hasta un 35% aproximadamente, lo que implica en la mayoría de las zonas censales, entre un quinto y un tercio de la población con estudios superiores, ya sean técnicos o universitarios. Sin embargo, el gráfico también muestra una cola larga de valores relativamente altos. Se espera que estas zonas se concentres en torno a los centros urbanos consolidados como Viña del Mar y Valparaíso, donde existe una mayor presencia de servicios, universidad y oportunidades laborales calificadas. Por contraste, las zonas con valores bajos de PES corresponden a sectores rurales o periféricos, donde las brechas educativas se mantienen más pronunciadas.
+:::
+
 ```{r histograma var 2, echo=FALSE, message=FALSE, warning=FALSE}
-# HISTOGRAMA DISTRIBUCIÓN DEL % DE EDUCACIÓN SUPERIOR
 ggplot(df_indicadores, aes(x = ptje_ed_superior)) +
-  geom_histogram(bins = 30, fill = '#6e6b22', color = 'white') +
-  labs(title = "Distribución del % de Educación Superior",
-       x = "% de Educación Superior",
-       y = "Frecuencia")
+  geom_histogram(bins = 30, fill = '#81762f', color = 'white', alpha = 0.9) +
+  geom_vline(aes(xintercept = mean(ptje_ed_superior, na.rm = TRUE)),
+             color = "red", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = mean(df_indicadores$ptje_ed_superior, na.rm = TRUE),
+           y = Inf, vjust = 2, label = "Media", color = "red",size = 3)+
+  labs(title = 'Distribución del % PES', subtitle = 'Provincia de Valparaíso',
+       x = '% PES',
+       y = 'Frecuencia') +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
 ```
+
+## 4.3 Relación y dispersión
 
 ```{r dispersion, echo=FALSE, message=FALSE, warning=FALSE}
 # DIAGRAMA DE DISPERSIÓN
 ggplot(df_indicadores, aes(x = ptje_mov_intercomunal, y = ptje_ed_superior)) +
   geom_point(color = "steelblue") +
-  labs(title = 'Relación entre % de Movilidad Intercomunal vs. % escolaridad',
-       x = '% de Movilidad Intercomunal',
-       y = '% de Educación Superior') +
+  labs(title = 'Relación entre % MIR vs. % PES',
+       x = '% MIR',
+       y = '% PES') +
 theme_minimal()
 ```
+
+## 4.4 Visualización espacial
+
+### 4.4.1 Distribución espacial % MIR
 
 ```{r mapa var 1, echo=FALSE, message=FALSE, warning=FALSE}
 # MAPA % DE MOVILIDAD INTERCOMUNAL POR ZONA CENSAL
@@ -379,6 +417,8 @@ ggplot() +
        subtitle = "Provincia de VALPARAÍSO")
 ```
 
+### 4.4.2 Distribución espacial % PES
+
 ```{r mapa var 2, echo=FALSE, message=FALSE, warning=FALSE}
 # MAPA % DE EDUCACIÓN SUPERIOR POR ZONA CENSAL
 ggplot() +
@@ -393,6 +433,8 @@ ggplot() +
   labs(title = "% de Educación Superior por zona censal",
        subtitle = "Provincia de VALPARAÍSO")
 ```
+
+### 4.4.3 Distribución bivariada %MIR - %PES
 
 ```{r bivariado, echo=FALSE, message=FALSE, warning=FALSE}
 sf_mapa_bi = bi_class(
