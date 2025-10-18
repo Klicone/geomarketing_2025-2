@@ -156,26 +156,43 @@ sf_centroides = st_centroid(sf_comunas)
 # 6. EDA
 ################################################################################
 
-# HISTOGRAMA DISTRIBUCIÓN DEL % DE MOVILIDAD INTERCOMUNAL
+# HISTOGRAMA DISTRIBUCIÓN DEL % MIR
 ggplot(df_indicadores, aes(x = ptje_mov_intercomunal)) +
-  geom_histogram(bins = 30, fill = '#226e6e', color = 'white') +
-  labs(title = 'Distribución del % de Movilidad Intercomunal',
-       x = '% de Movilidad Intercomunal',
-       y = 'Frecuencia')
+  geom_histogram(bins = 30, fill = '#226e6e', color = 'white', alpha = 0.9) +
+  geom_vline(aes(xintercept = mean(ptje_mov_intercomunal, na.rm = TRUE)),
+             color = "red", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = mean(df_indicadores$ptje_mov_intercomunal, na.rm = TRUE),
+           y = Inf, vjust = 2, label = "Media", color = "red",size = 3)+
+  labs(title = 'Distribución del % MIR', subtitle = 'Provincia de Valparaíso',
+       x = '% MIR',
+       y = 'Frecuencia') +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
 
-# HISTOGRAMA DISTRIBUCIÓN DEL % DE EDUCACIÓN SUPERIOR
+# HISTOGRAMA DISTRIBUCIÓN DEL % PES
 ggplot(df_indicadores, aes(x = ptje_ed_superior)) +
-  geom_histogram(bins = 30, fill = '#6e6b22', color = 'white') +
-  labs(title = "Distribución del % de Educación Superior",
-       x = "% de Educación Superior",
-       y = "Frecuencia")
+  geom_histogram(bins = 30, fill = '#81762f', color = 'white', alpha = 0.9) +
+  geom_vline(aes(xintercept = mean(ptje_ed_superior, na.rm = TRUE)),
+             color = "red", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = mean(df_indicadores$ptje_ed_superior, na.rm = TRUE),
+           y = Inf, vjust = 2, label = "Media", color = "red",size = 3)+
+  labs(title = 'Distribución del % PES', subtitle = 'Provincia de Valparaíso',
+       x = '% PES',
+       y = 'Frecuencia') +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
+
 
 # DIAGRAMA DE DISPERSIÓN
 ggplot(df_indicadores, aes(x = ptje_mov_intercomunal, y = ptje_ed_superior)) +
   geom_point(color = "steelblue") +
-  labs(title = 'Relación entre % de Movilidad Intercomunal vs. % escolaridad',
-       x = '% de Movilidad Intercomunal',
-       y = '% de Educación Superior') +
+  labs(title = 'Relación entre % MIR vs. % PES',
+       x = '% MIR',
+       y = '% PES') +
 theme_minimal()
 
 
