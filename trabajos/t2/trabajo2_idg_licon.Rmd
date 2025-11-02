@@ -1,0 +1,38 @@
+---
+title: "Situación de ocupación de vivienda en el Gran Santiago"
+subtitle: "Microsimulación CENSO 2017 - CASEN 2022"
+author: "Kevin Licón"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# 1. Introducción
+
+# 2. Objetivos
+
+## 2.1 Objetivo General
+
+## 2.2 Objetivos Específicos
+
+# 3. Metodología
+
+## 3.1 Librerías
+
+## 3.2 Conexión Base de Datos
+
+## 3.3 Variable de estudio
+
+## 3.4 Microsimulación
+
+## 3.5 Visualización
+
+# 4. Resultados y Análisis
+
+## 4.1 Distribución de situación de ocupación
+
+## 4.2 Resultado principal: Propietarios vs Arrendatarios
+
+## 4.3 Proporciones generales
+
+## 4.4 Proporciones normalizadas
+
