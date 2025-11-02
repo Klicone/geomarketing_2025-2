@@ -254,9 +254,49 @@ st_write(
   delete_layer = TRUE
 )
 
-# 6. Visualización
+# 6. Gráficos
 
-## 6.1 Observación de variable
+## 6.1 Distribución por Comuna
+
+# resumir proporciones por comuna
+comunas_v13 <- zonas_gs_v13 %>%
+  st_drop_geometry() %>%
+  group_by(nom_comuna) %>%
+  summarise(
+    propia             = mean(propia, na.rm = TRUE),
+    arrendada          = mean(arrendada, na.rm = TRUE),
+    cedida             = mean(cedida, na.rm = TRUE),
+    usufructo          = mean(usufructo, na.rm = TRUE),
+    ocup_irregular     = mean(ocup_irregular, na.rm = TRUE),
+    poseedor_irregular = mean(poseedor_irregular, na.rm = TRUE)
+  ) %>%
+  pivot_longer(-nom_comuna, names_to = "categoria", values_to = "proporcion")
+
+ggplot(comunas_v13, aes(x = reorder(nom_comuna, -proporcion), y = proporcion, fill = categoria)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_fill_brewer(palette = "Set2", name = "Categoría") +
+  coord_flip() +
+  labs(
+    title = "Estructura de tenencia de la vivienda por comuna (microsimulación)",
+    y = "Proporción dentro de la comuna",
+    x = NULL
+  ) +
+  theme_minimal(base_size = 10)
+
+# 6.2 Distribución índice
+ggplot(zonas_gs_v13, aes(x = arr_vs_prop)) +
+  geom_density(fill = "#3182bd", alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey30") +
+  labs(
+    title = "Distribución del índice Arriendo – Propiedad",
+    x = "Arriendo – Propia (puntos proporcionales)",
+    y = "Densidad de zonas censales"
+  ) +
+  theme_minimal(base_size = 10)
+
+# 7. Visualización
+
+## 7.1 Observación de variable
 
 # 1) comunas desde zonas
 comunas_rm <- zonas_gs_v13 %>%
@@ -317,7 +357,7 @@ ggplot() +
     caption = "Fuente: microsimulación CASEN–Censo"
   )
 
-## 6.2 PROPORCIONES DE TENENCIA
+## 7.2 PROPORCIONES DE TENENCIA
 
 # función base SIN normalizar
 mapa_tenencia_abs <- function(data, var, titulo) {
@@ -356,7 +396,7 @@ panel_abs + plot_annotation(
   caption = "Fuente: microsimulación CASEN–Censo"
 )
 
-## 6.3 TENENCIA NORMALIZADA
+## 7.3 TENENCIA NORMALIZADA
 
 # función que normaliza SOLO la variable de ese mapa
 mapa_tenencia_norm <- function(data, var, titulo) {
@@ -411,3 +451,4 @@ panel_norm + plot_annotation(
   title = "Tenencia de la vivienda (microsimulación) · cada categoría normalizada",
   caption = "Fuente: microsimulación CASEN–Censo"
 )
+
