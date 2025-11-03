@@ -1,38 +1,594 @@
 ---
 title: "Situación de ocupación de vivienda en el Gran Santiago"
 subtitle: "Microsimulación CENSO 2017 - CASEN 2022"
-author: "Kevin Licón"
+author: "Kevin Licón Esparza"
 date: "`r Sys.Date()`"
 output: html_document
 ---
 
 # 1. Introducción
 
+::: {style="text-align: justify;"}
+La vivienda constituye uno de los principales elementos en la configuración social y espacial del territorio. Su acceso, tipo y condición de ocupación reflejan no solo las posibilidades económicas de los hogares, sino también las dinámicas históricas de segregación, desarrollo inmobiliario y políticas habitacionales. En el contexto particular del Gran Santiago, este fenómeno se expresan con fuerza en la distribución desigual de la propiedad y el arriendo, evidenciando tensiones entre sectores consolidadas y áreas de expansión reciente.
+
+Para abordar este fenómeno, se utilizaron dos fuentes complementarias de información: la Encuesta de Caracterización Socioeconómica Nacional (CASEN) y el Censo de Población y Vivienda. La CASEN 2022, elaborada por el Ministerio de Desarrollo Social y Familiar, es una encuesta por muestreo que recopila información detallada sobre los hogares y personas del país, los cuales incluyen ingresos, educación, salud y condiciones de vivienda. Aunque su cobertura temática es amplia, su resolución territorial es limitada, ya que la muestra no permite inferencias directas a escalas menores que la comuna. Por otro lado, el Censo 2017 del Instituto Nacional de Estadísticas (INE) constituye un levantamiento exhaustivo que registra todas las viviendas y habitantes del país, alcanzando una cobertura espacial completa hasta el nivel de zona censal e, incluso, manzanas. Sin embardo, los detalles que dicho levantamiento posee es más acotado y general.
+
+A partir de de la integración de ambas fuentes y mediante técnicas de microsimulación, es posible combinar las fortalezas de cada una: el nivel de detalle estadístico de la CASEN y la precisión espacial del Censo. El procedimiento consiste en ajustar los microdatos de la CASEN a las distribuciones censales mediante un modelo de ponderación (raking), generando así una población sintética con características sociales realistas a escala zonal.
+
+El estudio se centra en la variable `v13` de la CASEN, correspondiente a la *situación de ocupación de la vivienda*, que distingue entre viviendas propias, arrendadas, cedidas, en usufructo, ocupación irregular o posesión irregular. A partir de su microsimulación sobre la estructura censal del Gran Santiago, se busca caracterizar la distribución espacial de estas categorías y, en particular, analizar el contraste entre propiedad y arriendo como ejes principales de la estructura residencial metropolitana.
+:::
+
 # 2. Objetivos
 
 ## 2.1 Objetivo General
 
+::: {style="text-align: justify;"}
+Analizar la distribución espacial de la situación de ocupación de la vivienda en el Gran Santiago mediante un modelo de microsimulación que integra información socioeconómica de la encuesta CASEN 2022 con la estructura poblacional del Censo 2017, con el propósito de identificar patrones territoriales en la tenencia a escala de zona censal.
+:::
+
 ## 2.2 Objetivos Específicos
+
+1.  ::: {style="text-align: justify;"}
+    Integrar los microdatos de la encuesta CASEN 2022 con las bases censales del Censo 2017 mediante un proceso de ajuste por ponderación y generación de población sintética.
+    :::
+
+2.  ::: {style="text-align: justify;"}
+    Estimar las proporciones de cada categoría de la variable `v13` a nivel de zona censal, aplicando imputaciones y recodificaciones para mejorar la consistencia de los datos.
+    :::
+
+3.  ::: {style="text-align: justify;"}
+    Visualizar y analizar los resultados obtenidos a través de representaciones cartográficas y estadísticas, que permitan interpretar los contrastes espaciales entre las diferentes situaciones de ocupación.
+    :::
 
 # 3. Metodología
 
 ## 3.1 Librerías
 
-## 3.2 Conexión Base de Datos
+Para la realización del trabajo se utilizó como entorno de programación R (versión 4.5.1), complementado con un conjunto de librerías que permiten la conexión a bases de datos, manipulación de datos espaciales, microsimulación y visualización estadística.
 
-## 3.3 Variable de estudio
+```{r Librerías, echo=TRUE, message=FALSE, warning=FALSE}
+library(rakeR)
+library(RPostgres)
+library(DBI)
+library(sf)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(patchwork)
+```
 
-## 3.4 Microsimulación
+Estas herramientas permiten obtener un flujo de análisis más acabado
 
-## 3.5 Visualización
+## 3.2 Preprocesado
+
+El preprocesamiento de los datos tuvo como propósito armonizar las estructuras de la CASEN y el CENSO, de modo que ambas puedan integrarse en el proceso de microsimulación.
+
+En primer lugar, se leyeron los archivos en formato `RDS`, correspondientes a la CASEN regional y a la base censal de *constraints* a partir del Censo.
+
+```{r Rutas, message=FALSE, warning=FALSE, include=FALSE}
+# Rutas de las entradas
+ruta_casen = '../../data/casen_rm.rds'
+ruta_censo = '../../data/cons_censo_df.rds'
+
+# DF de CASEN Y CENSO
+casen_raw = readRDS(ruta_casen)
+cons_censo_df = readRDS(ruta_censo)
+```
+
+La base censal contiene los conteos de poblaciones por zona censal y comuna, desagregados según las variables demográficas que funcionan como restricciones del modelo: `edad`, `nivel educacional` y `sexo`.
+
+```{r Niveles, message=FALSE, warning=FALSE, include=FALSE}
+# 3.1 CENSO
+col_cons = sort(setdiff(names(cons_censo_df),
+                        c('GEOCODIGO','COMUNA')))
+
+# niveles para prefijos
+age_levels = grep('^edad', col_cons, value = TRUE)
+esc_levels = grep('^esco', col_cons, value = TRUE)
+sex_levels = grep('^sexo', col_cons, value = TRUE)
+```
+
+En la base CASEN se seleccionaron las variables necesarias para el análisis:
+
+```{r Variables, echo=TRUE, message=FALSE, warning=FALSE}
+# Variables de interes de CASEN
+vars_base = c(
+  'estrato', #extraer comuna
+  'esc', #años de escolaridad
+  'edad',
+  'sexo',
+  'e6a', #para imputar esc
+  'v13' #situación de ocupacion de la vivienda
+)
+```
+
+Considerando que:
+
+-   `estrato`, utilizado para extraer el código de comuna
+
+-   `edad`, `sexo`, `esc` (años de escolaridad) y `e6a` (nivel educacional), empleados para la construcción de las categorías de simulación.
+
+-   `v13`, variable central del estudio que representa la situación de ocupación de la vivienda.
+
+Posteriormente, se eliminaron etiquetas de variables y se convirtieron los campos de tipos numéricos base, asegurando la compatibilidad con las funciones del paquete `rakeR`.
+
+```{r Etiquetado, message=FALSE, warning=FALSE, include=FALSE}
+# filtrar casen con las variables de interés
+casen = casen_raw[, vars_base, drop = FALSE]
+
+# limpiar memoria
+rm(casen_raw)
+
+# Extraer la comuna desde estrato (primero 5 digitos)
+casen$Comuna = substr(as.character(casen$estrato),1,5)
+
+#eliminar la columna estrato
+casen$estrato = NULL
+
+#Quitar etiquetas y pasar a tipo base
+casen$esc = as.integer(unclass(casen$esc))
+casen$edad = as.integer(unclass(casen$edad))
+casen$e6a = as.numeric(unclass(casen$e6a))
+casen$sexo = as.integer(unclass(casen$sexo))
+casen$v13 = as.integer(unclass(casen$v13))
+```
+
+Los valores faltantes en la variables `esc` fueron imputados mediante un modelo lineal simple basado en `e6a`, lo que permitió conservar coherencia interna entre ambas medidas de educación.
+
+```{r Imputar, echo=TRUE, message=FALSE, warning=FALSE}
+#imputar datos de esc en base a e6a
+idx_na = which(is.na(casen$esc))
+
+#Ajustar modelo con casos donde no hay NA's
+fit = lm(esc ~ e6a,data = casen[-idx_na,])
+
+#Predicción para los casos con NA
+pred = predict(fit, newdata = casen[idx_na, ,drop = FALSE])
+
+#Imputar acotada
+casen$esc[idx_na] = as.integer(round(pmax(0, pmin(29, pred))))
+
+#añadimos ID unico por registro
+casen$ ID = as.character(seq_len(nrow(casen)))
+```
+
+Finalmente, se crearon categorías equivalentes para edad, educación y sexo, de acuerdo con los niveles definidos en la estructura censal, lo que permite garantizar la correspondencia entre ambas fuentes.
+
+```{r Categorizar, message=FALSE, warning=FALSE, include=FALSE}
+#categorizar edad usando nombres del censo
+casen$edad_cat = cut(
+  casen$edad,
+  breaks = c(0, 30, 40, 50, 60, 70, 80, Inf),
+  labels = age_levels,
+  right = FALSE,
+  include.lowest = TRUE
+)
+
+#categorizar escolaridad (4 tramos) usando nombres del censo
+casen$esc_cat = factor(
+  with(casen,
+       ifelse(esc == 0, esc_levels[1],
+              ifelse(esc <= 8, esc_levels[2],
+                     ifelse(esc <= 12, esc_levels[3],
+                            esc_levels[4])))),
+  levels = esc_levels
+)
+
+#recodificación de sexo usando nombres del censo
+casen$sexo_cat = factor(
+  ifelse(casen$sexo == 2, sex_levels[1],
+         ifelse(casen$sexo == 1, sex_levels[2], NA)),
+  levels = sex_levels
+)
+```
+
+Este proceso resulta esencial para asegurar que los microdatos de la CASEN puedan ser ajustados correctamente a las distribuciones poblacionales completas del Censo, posibilitando la estimación espacial futura.
+
+## 3.3 Microsimulación
+
+La microsimulación tuvo por objetivo generar una población sintética que reprodujera las características de la CASEN 2022, ajustadas a la estructura poblacional del Censo 2017. El procedimiento se realizó con el paquete `rakeR`, que permite calibrar microdatos mediante un proceso iterativo de ajuste de pesos (*raking).*
+
+Para cada comuna del Gran Santiago se construyeron matrices de *constraints* censales y se ajustaron los individuos de la CASEN hasta que las distribuciones coincidieran con las del Censo.
+
+```{r constraints, message=FALSE, warning=FALSE, include=FALSE}
+#Crear lista de constrains por comuna (CENSO)
+cons_censo_comunas = split(cons_censo_df, cons_censo_df$COMUNA)
+
+#crear lista de individuos por comuna (CASEN)
+inds_list = split(casen, casen$Comuna)
+```
+
+```{r Microsimulación, echo=TRUE, message=FALSE, warning=FALSE}
+sim_list <- lapply(names(cons_censo_comunas), function(zona) {
+  
+  # --- Censo: constraints de la comuna ---
+  cons_i <- cons_censo_comunas[[zona]]
+  col_order <- sort(setdiff(names(cons_i), c("COMUNA","GEOCODIGO")))
+  cons_i <- cons_i[, c("GEOCODIGO", col_order), drop = FALSE]
+  
+  # --- CASEN: individuos de la comuna ---
+  tmp <- inds_list[[zona]]
+  inds_i <- tmp[, c("ID","edad_cat","esc_cat","sexo_cat"), drop = FALSE]
+  names(inds_i) <- c("ID","Edad","Escolaridad","Sexo")
+  
+  # --- Ponderación (raking) ---
+  w_frac <- weight(
+    cons = cons_i,
+    inds = inds_i,
+    vars = c("Edad","Escolaridad","Sexo")
+  )
+  
+  # --- Integerización (crear población sintética) ---
+  sim_i <- integerise(weights = w_frac, inds = inds_i, seed = 123)
+  
+  # --- Merge con v13 (la variable a microsimular) ---
+  merge(sim_i,
+        tmp[, c("ID","v13")],
+        by = "ID",
+        all.x = TRUE)
+})
+```
+
+Con los pesos resultantes, se genera una población expandida mediante `integerise()`, que simula el total de habitantes manteniendo la coherencia demográfica y educativa.
+
+A esta población se le asignó la variable `v13`, obteniendo así las proporciones estimadas de cada categoría con respecto a las otras (propia, arrendada, cedida, usufructo, ocupación irregular y poseedor irregular) a nivel de zona censal.
+
+```{r Proporciones, message=FALSE, warning=FALSE, include=FALSE}
+#Unir odas las comunas en un solo dataframe
+sim_df = data.table::rbindlist(sim_list, idcol = 'COMUNA')
+
+
+#Cálculo de proporciones de cada categoría de v13 por zona censal
+zonas_v13 = sim_df %>%
+  #Renombrar identificador de zona
+  rename(geocodigo = zone) %>%
+  
+  #Conteo de individuos por zona y categoría de v13
+  group_by(geocodigo, v13) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  
+  #Cálculo de proporciones dentro de cada zona
+  group_by(geocodigo) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup() %>%
+  
+  #Mantener solo las columnas necesarias
+  select(geocodigo, v13, prop) %>%
+  distinct(geocodigo, v13, .keep_all = TRUE) %>%
+  
+  #Transformación de formato largo a ancho (una fila por zona)
+  pivot_wider(
+    names_from  = v13,
+    values_from = prop,
+    names_prefix = "prop_v13_",
+    values_fill = 0
+  ) %>%
+  
+  #Ordenar por código de zona
+  arrange(geocodigo)
+
+#renombrar encabezados
+names(zonas_v13) = c(
+  "geocodigo",
+  "propia",
+  "arrendada",
+  "cedida",
+  "usufructo",
+  "ocup_irregular",
+  "poseedor_irregular"
+)
+```
+
+### 3.3.1 Constraints
+
+La selección de las variables de control es un pilar fundamental en el proceso de microsimulación, ya que determinará el grado de coherencia entre los microdatos de encuesta y la estructura poblacional del censo. En este estudio, la *situación de ocupación de la vivienda* se caracterizó a partir de tres variables sociodemográficas principales como se mencionó con anterioridad: edad, nivel educativo y sexo, disponibles tanto en CASEN como en el Censo.
+
+La inclusión de la edad responde a su relación directa con el acceso a la propiedad: las tasas de tenencia aumentan conforme los hogares envejecen, debido a la acumulación de ingresos y estabilidad residencial alcanzada con el ciclo vital (Stanford University, 2018).
+
+El nivel educativo, por otra parte, actúa como un indicador del estatus socioeconómico de forma indirecta, influyendo en la capacidad de ahorro, endeudamiento y acceso a créditos hipotecarios (Wang et al. 2022).
+
+Finalmente, el sexo se incorpora por las diferencias observadas en participación laboral, ingresos y roles familiares, que afectan los patrones de propiedad y arriendo dentro del hogar (Australian Institute of Health and Welfare 2023).
+
+La combinación de estas tres dimensiones permite capturar los principales factores demográficos y económicos asociados a la tenencia de vivienda, asegurando que la simulación refleje de manera realista la heterogeneidad social del Gran Santiago.
+
+## 3.4 Visualización
+
+La representación espacial se desarrolló en R utilizando `ggplot2` y `patchwork`, en conjunto con la base de datos PostgreSQL. Los resultados de la microsimulación se escribieron en tablas del esquema `output` mediante la librería `RPostgres`, lo que permitió consultar, unir y visualizar los datos de manera externa desde herramientas geográficas como QGIS.
+
+Mediante consultas SQL, se extrajeron las zonas censales urbanas del Gran Santiago desde el esquema `dpa` y se unieron con las tablas simuladas a través del campo *geocodigo*, incorporando así la geometría de cada zona al conjunto de resultados.
+
+```{r conexión, message=FALSE, warning=FALSE, include=FALSE}
+
+#Parámetros de conexión
+db_host = "localhost"
+db_port = 5432
+db_name = "censo_rm_clases"
+db_user = "postgres"
+db_password = "postgres"
+
+#Conexión
+con = dbConnect(
+  Postgres(),
+  dbname   = db_name,
+  host     = db_host,
+  port     = db_port,
+  user     = db_user,
+  password = db_password
+)
+
+#Escribir tabla en la DB
+dbWriteTable(
+  con,
+  name = DBI::SQL("output.zonas_v13"),
+  value = zonas_v13,
+  row.names = FALSE,
+  overwrite = TRUE
+)
+```
+
+```{r query, echo=TRUE, message=FALSE, warning=FALSE}
+query_zonas = "
+SELECT *
+FROM dpa.zonas_censales_rm
+WHERE urbano = 1
+  AND (
+    nom_provin = 'SANTIAGO'
+    OR nom_comuna IN ('PUENTE ALTO', 'SAN BERNARDO')
+  );
+"
+```
+
+```{r correcciones, message=FALSE, warning=FALSE, include=FALSE}
+zonas_gs = st_read(con, query = query_zonas)
+
+#Asegurar mismo tipo que en zonas_v13
+zonas_gs$geocodigo = as.character(zonas_gs$geocodigo)
+
+#Unir la geometría con la v13
+zonas_gs_v13 = zonas_gs %>%
+  left_join(zonas_v13, by = 'geocodigo')
+
+# imputar valores NA usando la mediana de la misma comuna
+zonas_gs_v13 <- zonas_gs_v13 %>%
+  group_by(nom_comuna) %>%
+  mutate(
+    propia             = ifelse(is.na(propia),             median(propia,             na.rm = TRUE), propia),
+    arrendada          = ifelse(is.na(arrendada),          median(arrendada,          na.rm = TRUE), arrendada),
+    cedida             = ifelse(is.na(cedida),             median(cedida,             na.rm = TRUE), cedida),
+    usufructo          = ifelse(is.na(usufructo),          median(usufructo,          na.rm = TRUE), usufructo),
+    ocup_irregular     = ifelse(is.na(ocup_irregular),     median(ocup_irregular,     na.rm = TRUE), ocup_irregular),
+    poseedor_irregular = ifelse(is.na(poseedor_irregular), median(poseedor_irregular, na.rm = TRUE), poseedor_irregular)
+  ) %>%
+  ungroup()
+
+
+#Escribir tabla espacial
+st_write(
+  zonas_gs_v13,
+  dsn = con,
+  layer = DBI::SQL('output.zc_tenencia_microsim'),
+  delete_layer = TRUE
+)
+```
+
+## 3.5 Variable derivada
+
+Con el propósito de sintetizar la diferencia entre las dos formas de ocupación más comunes, se construyo un índice continuo "*Arriendo - Propietario"*, definido como:
+
+$$ I_{\text{AP}} = P_{\text{arrendada}} - P_{\text{propia}}$$
+
+donde $P_{\text{arrendada}}$ y $P_{\text{propia}}$ representan las proporciones simuladas de viviendas arrendadas y propias respectivamente, para cada zona censal.
+
+Valores positivos indican predominio del arriendo, mientras que valores negativos reflejan mayor presencia de propietarios. Para su representación cartográfica, los valores se truncaron entre ±0,5 para mejorar la interpretación visual.
 
 # 4. Resultados y Análisis
 
 ## 4.1 Distribución de situación de ocupación
 
+```{r gráfico, echo=FALSE, message=FALSE, warning=FALSE}
+# resumir proporciones por comuna
+comunas_v13 <- zonas_gs_v13 %>%
+  st_drop_geometry() %>%
+  group_by(nom_comuna) %>%
+  summarise(
+    propia             = mean(propia, na.rm = TRUE),
+    arrendada          = mean(arrendada, na.rm = TRUE),
+    cedida             = mean(cedida, na.rm = TRUE),
+    usufructo          = mean(usufructo, na.rm = TRUE),
+    ocup_irregular     = mean(ocup_irregular, na.rm = TRUE),
+    poseedor_irregular = mean(poseedor_irregular, na.rm = TRUE)
+  ) %>%
+  pivot_longer(-nom_comuna, names_to = "categoria", values_to = "proporcion")
+
+ggplot(comunas_v13, aes(x = reorder(nom_comuna, -proporcion), y = proporcion, fill = categoria)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_fill_brewer(palette = "Set2", name = "Categoría") +
+  coord_flip() +
+  labs(
+    title = "Estructura de tenencia de la vivienda por comuna (microsimulación)",
+    y = "Proporción dentro de la comuna",
+    x = NULL
+  ) +
+  theme_minimal(base_size = 10)
+```
+
 ## 4.2 Resultado principal: Propietarios vs Arrendatarios
+
+```{r cartografia Iap, echo=FALSE, message=FALSE, warning=FALSE}
+## 7.1 Observación de variable
+
+# 1) comunas desde zonas
+comunas_rm <- zonas_gs_v13 %>%
+  group_by(nom_comuna) %>%
+  summarise() %>%
+  ungroup()
+
+# 2) crear la diferencia (si no existe)
+#    arriendo - propia
+zonas_gs_v13 <- zonas_gs_v13 %>%
+  mutate(
+    arr_vs_prop = arrendada - propia   # aquí sí usamos las columnas que dijiste que existen
+  )
+
+# 3) truncar para visualización
+zonas_gs_v13 <- zonas_gs_v13 %>%
+  mutate(
+    arr_vs_prop_plot = pmax(pmin(arr_vs_prop, 0.5), -0.5)
+  )
+
+# 4) mapa
+ggplot() +
+  geom_sf(
+    data = zonas_gs_v13,
+    aes(fill = arr_vs_prop_plot),
+    color = "white",
+    size = 0.05
+  ) +
+  geom_sf(
+    data = comunas_rm,
+    fill = NA,
+    color = "grey20",
+    size = 0.3
+  ) +
+  scale_fill_gradient2(
+    low = "#2b8cbe",      # más propiedad
+    mid = "#f7f7f7",      # equilibrio
+    high = "#e34a33",     # más arriendo
+    midpoint = 0,
+    limits = c(-0.5, 0.5),
+    breaks = c(-0.5, -0.25, 0, 0.25, 0.5),
+    labels = c("-50%", "-25%", "0", "25%", "50%"),
+    name = "Arriendo – Propia"
+  ) +
+  coord_sf(datum = NA) +
+  theme_void(base_size = 10) +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    legend.position = "right",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 12),
+    plot.subtitle = element_text(hjust = 0.5, colour = "grey30", size = 9),
+    plot.caption = element_text(colour = "grey50", size = 7, hjust = 1)
+  ) +
+  labs(
+    title = "Arriendo vs vivienda propia",
+    subtitle = "Rojo: mayor presencia de arriendo · Azul: mayor presencia de propiedad\nValores truncados en ±50% para mejorar lectura",
+    caption = "Fuente: microsimulación CASEN–Censo"
+  )
+```
+
+```{r Densidad distribucion, echo=FALSE, message=FALSE, warning=FALSE}
+#Distribución índice
+ggplot(zonas_gs_v13, aes(x = arr_vs_prop)) +
+  geom_density(fill = "#3182bd", alpha = 0.4) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey30") +
+  labs(
+    title = "Distribución del índice Arriendo – Propiedad",
+    x = "Arriendo – Propia (puntos proporcionales)",
+    y = "Densidad de zonas censales"
+  ) +
+  theme_minimal(base_size = 10)
+```
 
 ## 4.3 Proporciones generales
 
+```{r sin normalizar, echo=FALSE, message=FALSE, warning=FALSE}
+# función base SIN normalizar
+mapa_tenencia_abs <- function(data, var, titulo) {
+  ggplot() +
+    geom_sf(data = data, aes(fill = .data[[var]]), color = NA) +
+    geom_sf(data = comunas_rm, fill = NA, color = "white", size = 0.25) +
+    # paleta secuencial verde
+    scale_fill_gradient(
+      low = "#e5f5e0",
+      high = "#006d2c",
+      limits = c(0, 1),
+      name = "Proporción"
+    ) +
+    coord_sf(datum = NA) +
+    theme_void(base_size = 9) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5)
+    ) +
+    labs(title = titulo)
+}
+
+m1_abs <- mapa_tenencia_abs(zonas_gs_v13, "propia", "Propia")
+m2_abs <- mapa_tenencia_abs(zonas_gs_v13, "arrendada", "Arrendada")
+m3_abs <- mapa_tenencia_abs(zonas_gs_v13, "cedida", "Cedida")
+m4_abs <- mapa_tenencia_abs(zonas_gs_v13, "usufructo", "Usufructo")
+m5_abs <- mapa_tenencia_abs(zonas_gs_v13, "ocup_irregular", "Ocup. irregular")
+m6_abs <- mapa_tenencia_abs(zonas_gs_v13, "poseedor_irregular", "Poseedor irregular")
+
+# panel con UNA sola leyenda
+panel_abs <- (m1_abs + m2_abs + m3_abs + m4_abs + m5_abs + m6_abs) +
+  plot_layout(ncol = 3, guides = "collect") &
+  theme(legend.position = "right")
+
+panel_abs + plot_annotation(
+  title = "Tenencia de la vivienda (microsimulación) · proporciones reales",
+  caption = "Fuente: microsimulación CASEN–Censo"
+)
+```
+
 ## 4.4 Proporciones normalizadas
 
+```{r normalizado, echo=FALSE, message=FALSE, warning=FALSE}
+# función que normaliza SOLO la variable de ese mapa
+mapa_tenencia_norm <- function(data, var, titulo) {
+  v <- data[[var]]
+  vmin <- min(v, na.rm = TRUE)
+  vmax <- max(v, na.rm = TRUE)
+  
+  if (isTRUE(all.equal(vmin, vmax))) {
+    vnorm <- rep(0, length(v))
+  } else {
+    vnorm <- (v - vmin) / (vmax - vmin)
+  }
+  
+  data2 <- data
+  data2[[paste0(var, "_norm")]] <- vnorm
+  
+  ggplot() +
+    geom_sf(data = data2,
+            aes(fill = .data[[paste0(var, "_norm")]]),
+            color = NA) +
+    geom_sf(data = comunas_rm,
+            fill = NA,
+            color = "white",
+            size = 0.25) +
+    # paleta azul más clara
+    scale_fill_gradient(
+      low = "#deebf7",
+      high = "#08519c",
+      limits = c(0, 1),
+      name = "Intensidad\n(normalizada)"
+    ) +
+    coord_sf(datum = NA) +
+    theme_void(base_size = 9) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5)
+    ) +
+    labs(title = titulo)
+}
+
+m1_norm <- mapa_tenencia_norm(zonas_gs_v13, "propia", "Propia")
+m2_norm <- mapa_tenencia_norm(zonas_gs_v13, "arrendada", "Arrendada")
+m3_norm <- mapa_tenencia_norm(zonas_gs_v13, "cedida", "Cedida")
+m4_norm <- mapa_tenencia_norm(zonas_gs_v13, "usufructo", "Usufructo")
+m5_norm <- mapa_tenencia_norm(zonas_gs_v13, "ocup_irregular", "Ocup. irregular")
+m6_norm <- mapa_tenencia_norm(zonas_gs_v13, "poseedor_irregular", "Poseedor irregular")
+
+panel_norm <- (m1_norm + m2_norm + m3_norm + m4_norm + m5_norm + m6_norm) +
+  plot_layout(ncol = 3, guides = "collect") &
+  theme(legend.position = "right")
+
+panel_norm + plot_annotation(
+  title = "Tenencia de la vivienda (microsimulación) · cada categoría normalizada",
+  caption = "Fuente: microsimulación CASEN–Censo"
+)
+```
+
+# 5. Conclusiones
+
+# 6. Bibliografía
