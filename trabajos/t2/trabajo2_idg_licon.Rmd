@@ -44,7 +44,9 @@ Analizar la distribución espacial de la situación de ocupación de la vivienda
 
 ## 3.1 Librerías
 
+::: {style="text-align: justify;"}
 Para la realización del trabajo se utilizó como entorno de programación R (versión 4.5.1), complementado con un conjunto de librerías que permiten la conexión a bases de datos, manipulación de datos espaciales, microsimulación y visualización estadística.
+:::
 
 ```{r Librerías, echo=TRUE, message=FALSE, warning=FALSE}
 library(rakeR)
@@ -57,13 +59,17 @@ library(ggplot2)
 library(patchwork)
 ```
 
+::: {style="text-align: justify;"}
 Estas herramientas permiten obtener un flujo de análisis más acabado
+:::
 
 ## 3.2 Preprocesado
 
+::: {style="text-align: justify;"}
 El preprocesamiento de los datos tuvo como propósito armonizar las estructuras de la CASEN y el CENSO, de modo que ambas puedan integrarse en el proceso de microsimulación.
 
 En primer lugar, se leyeron los archivos en formato `RDS`, correspondientes a la CASEN regional y a la base censal de *constraints* a partir del Censo.
+:::
 
 ```{r Rutas, message=FALSE, warning=FALSE, include=FALSE}
 # Rutas de las entradas
@@ -75,7 +81,9 @@ casen_raw = readRDS(ruta_casen)
 cons_censo_df = readRDS(ruta_censo)
 ```
 
+::: {style="text-align: justify;"}
 La base censal contiene los conteos de poblaciones por zona censal y comuna, desagregados según las variables demográficas que funcionan como restricciones del modelo: `edad`, `nivel educacional` y `sexo`.
+:::
 
 ```{r Niveles, message=FALSE, warning=FALSE, include=FALSE}
 # 3.1 CENSO
@@ -88,7 +96,9 @@ esc_levels = grep('^esco', col_cons, value = TRUE)
 sex_levels = grep('^sexo', col_cons, value = TRUE)
 ```
 
+::: {style="text-align: justify;"}
 En la base CASEN se seleccionaron las variables necesarias para el análisis:
+:::
 
 ```{r Variables, echo=TRUE, message=FALSE, warning=FALSE}
 # Variables de interes de CASEN
@@ -102,6 +112,7 @@ vars_base = c(
 )
 ```
 
+::: {style="text-align: justify;"}
 Considerando que:
 
 -   `estrato`, utilizado para extraer el código de comuna
@@ -111,6 +122,7 @@ Considerando que:
 -   `v13`, variable central del estudio que representa la situación de ocupación de la vivienda.
 
 Posteriormente, se eliminaron etiquetas de variables y se convirtieron los campos de tipos numéricos base, asegurando la compatibilidad con las funciones del paquete `rakeR`.
+:::
 
 ```{r Etiquetado, message=FALSE, warning=FALSE, include=FALSE}
 # filtrar casen con las variables de interés
@@ -133,6 +145,7 @@ casen$sexo = as.integer(unclass(casen$sexo))
 casen$v13 = as.integer(unclass(casen$v13))
 ```
 
+::: {style="text-align: justify;"}
 Los valores faltantes en la variables `esc` fueron imputados mediante un modelo lineal simple basado en `e6a`, lo que permitió conservar coherencia interna entre ambas medidas de educación.
 
 ```{r Imputar, echo=TRUE, message=FALSE, warning=FALSE}
@@ -201,27 +214,27 @@ inds_list = split(casen, casen$Comuna)
 ```{r Microsimulación, echo=TRUE, message=FALSE, warning=FALSE}
 sim_list <- lapply(names(cons_censo_comunas), function(zona) {
   
-  # --- Censo: constraints de la comuna ---
+  # Censo: constraints de la comuna 
   cons_i <- cons_censo_comunas[[zona]]
   col_order <- sort(setdiff(names(cons_i), c("COMUNA","GEOCODIGO")))
   cons_i <- cons_i[, c("GEOCODIGO", col_order), drop = FALSE]
   
-  # --- CASEN: individuos de la comuna ---
+  # CASEN: individuos de la comuna 
   tmp <- inds_list[[zona]]
   inds_i <- tmp[, c("ID","edad_cat","esc_cat","sexo_cat"), drop = FALSE]
   names(inds_i) <- c("ID","Edad","Escolaridad","Sexo")
   
-  # --- Ponderación (raking) ---
+  # Ponderación (raking) 
   w_frac <- weight(
     cons = cons_i,
     inds = inds_i,
     vars = c("Edad","Escolaridad","Sexo")
   )
   
-  # --- Integerización (crear población sintética) ---
+  # Integerización (crear población sintética)
   sim_i <- integerise(weights = w_frac, inds = inds_i, seed = 123)
   
-  # --- Merge con v13 (la variable a microsimular) ---
+  # Merge con v13 (la variable a microsimular)
   merge(sim_i,
         tmp[, c("ID","v13")],
         by = "ID",
@@ -385,6 +398,12 @@ Valores positivos indican predominio del arriendo, mientras que valores negativo
 
 ## 4.1 Distribución de situación de ocupación
 
+El gráfico a continuación muestra la estructura de tenencia de la vivienda por comuna en el Gran Santiago, estimada mediante microsimulación.
+
+Se observa que la vivienda propia constituye la forma de ocupación predominante en la mayoría de las comunas. En general, la distribución por comuna de las diferentes situaciones de ocupación es bastante similar, salvo algunas excepciones como la comuna de Santiago.
+
+La categorías cedida, usufructo, ocupación irregular y poseedor irregular presentan particiones mucho menores, aunque su presencia confirma la existencia de formas de tenencia intermedias o precarias, asociadas a dependencia familiar o a situaciones de informalidad habitacional.
+
 ```{r gráfico, echo=FALSE, message=FALSE, warning=FALSE}
 # resumir proporciones por comuna
 comunas_v13 <- zonas_gs_v13 %>%
@@ -413,6 +432,12 @@ ggplot(comunas_v13, aes(x = reorder(nom_comuna, -proporcion), y = proporcion, fi
 ```
 
 ## 4.2 Resultado principal: Propietarios vs Arrendatarios
+
+El índice *Arriendo - Propiedad* sintetiza la relación entre ambas formas de ocupación de la vivienda, permitiendo comparar su peso relativo en cada zona censal. En términos generales, la microsimulación muestra que la vivienda propia continua siendo el régimen de tenencia predominante, aunque con una presencia significativa del arriendo, lo que sugiere un proceso de diversificación en las formas de acceso a la vivienda.
+
+Si se pasa al estudio espacial de la variable, resulta interesante observar que desde el centro hacía la periferia del Gran Santiago, existe una transformación en la situación de ocupación de la vivienda. En la zona centro tenemos el mayor índice de arriendo, sobre pasando en 50% las personas que arriendan por sobre los propietarios, mientras que cuando salimos del anillo de Américo Vespucio la situación se revierte. También existe una zona intermedia entre ambas zonas, donde la distribución de las proporciones es más pareja. Resulta lógico pensar, a partir de lo observado, que el crecimiento urbano que se ha dado en la periferia ha ido acompañado de personas que migran a esos sectores, donde existen más posibilidades de acceder y comprar una vivienda. Mientras que en el centro, los dueños de las propiedades han optado por vivir en otros sectores y arrendar sus viviendas por motivos que pueden tener muchas dimensiones.
+
+Otro aspecto relevante a destacar, es que no existe mucha variaciones interna en cada comuna con respecto a la situación de ocupación, lo que tiene sentido en el contexto nacional, donde las comunas siempre han sido estigmatizadas más que los barrios, por lo que la gente opta por establecerse de una forma en particular en la comuna por sobre un barrio en específico. En general, la comunas son bastantes uniformes en la forma que ocupan la vivienda una persona, ya sea arrendando o siendo propietario.
 
 ```{r cartografia Iap, echo=FALSE, message=FALSE, warning=FALSE}
 ## 7.1 Observación de variable
@@ -477,6 +502,8 @@ ggplot() +
   )
 ```
 
+En cuanto a la densidad de arrendatarios y propietarios por zona censal, vemos que la mayor cola se concentra en valores negativos, lo que reafirman que la proporción de mayor consistencia corresponde a los propietarios, mientras que la cola positiva es el caso excepcional del centro del área metropolitana urbana. La gráfica también tiene sentido desde una perspectiva del tamaño y cantidad de las comunas, ya que en la periferia tenemos mayores zonas censales, por lo cuál la densidad de propietarios es aún mayor en comparación con las zonas más céntricas.
+
 ```{r Densidad distribucion, echo=FALSE, message=FALSE, warning=FALSE}
 #Distribución índice
 ggplot(zonas_gs_v13, aes(x = arr_vs_prop)) +
@@ -491,6 +518,8 @@ ggplot(zonas_gs_v13, aes(x = arr_vs_prop)) +
 ```
 
 ## 4.3 Proporciones generales
+
+A continuación se presentan las proporciones simuladas de cada categoría de tenencia de la vivienda en el Gran Santiago.
 
 ```{r sin normalizar, echo=FALSE, message=FALSE, warning=FALSE}
 # función base SIN normalizar
@@ -531,7 +560,11 @@ panel_abs + plot_annotation(
 )
 ```
 
+Como ya se mencionó, la vivienda propia constituye la modalidad predominante sobre todo en zonas de la periferia. En general, el resto de las categorías, excluyendo la arrendada, muestran valores muy bajos que dificultan encontrar patrones territoriales, los cuales no son captados por la forma en que se presentan los datos actualmente. Estos mapas solo confirmar la coherencia del modelo de microsimulación.
+
 ## 4.4 Proporciones normalizadas
+
+Para estudiar en mayor detalle cada proporción, se normalizo cada una, para poder hallar patrones espaciales sobre todo en aquellas que representan una proporción muy baja del total.
 
 ```{r normalizado, echo=FALSE, message=FALSE, warning=FALSE}
 # función que normaliza SOLO la variable de ese mapa
@@ -589,6 +622,34 @@ panel_norm + plot_annotation(
 )
 ```
 
+De esta forma, podemos observar que las viviendas cedidas se distribuyen en gran parte de la capital, pero existe una gran ausencia de este tipo de ocupación en sectores más acomodados como el oriente. Así mismo, las zonas con mayor nivel de este tipo ocurre en sectores más populares, como los del sur del Gran Santiago.
+
+Resulta interesante el caso de ocupación irregular, donde la comuna con mayor intensidad en cuanto a la presencia de este tipo, es Huechuraba. Si bien existen otros sectores de la capital donde existan este tipo de situaciones, es probable que en esta comuna las personas hayan tenido más confianza para responder frente a su situación de ocupación.
+
+Finalmente, la posesión irregular que esta presente en algunas comunas, tiene relación con los hogares que habitan una vivienda que consideran suya pero que no cuenta con un título de propiedad formal inscrito, diferente a la ocupación, donde se hace uso de una vivienda o terreno sin autorización legal del propietario. Es probable que las zonas que presentan mayor proporción de este tipo de situación existan ciertas condiciones históricas y urbanas como antigüedad del poblamiento y herencias sin regular o una débil formalización de títulos de dominio.
+
 # 5. Conclusiones
 
+La microsimulación planteada permitió estimar con alta coherencia la distribución de las formas de ocupación de la vivienda en el Gran Santiago, combinando la estructura demográfica del Censo 2017 con la información socioeconómica de la CASEN 2022. En general, los resultados muestran que la vivienda propia continúa siendo la modalidad predominante, aunque se observa que este fenómeno se acrecienta en zonas donde ha ido creciendo la urbanización.
+
+La construcción del índice facilitó una lectura sintética del fenómeno, evidenciando las diferencias entre contextos donde predomina la estabilidad residencial y aquellos caracterizados por mayor movilidad y dependencia del mercado de arriendos. Asimismo, las categorías minoritarias aportan información valiosa sobre formas intermedias o precarias de tenencia, que suelen quedar subrepresentadas en estadísticas agregadas.
+
+Metodológicamente, el uso de `rakeR` y la integración con PostgreSQL demostraron la capacidad de microsimulación para enlazar datos censales y muestrales, generando información espacialmente desagregada y consistente. El modelo podría ser mejorado escogiendo variables *constraints* que aporten mayor consistencia a la variable que se desea estudiar, de modo que se puedan visualizar patrones más específicos en el espacio.
+
+Finalmente, el estudio evidencio una tendencia en abandonar el centro hacía zonas periféricas, donde se han adquiridos propiedades para vivir, a diferencia de zonas céntricas que a raíz de diferentes circunstancias, los propietarios han optado por el arriendo de sus inmuebles, generando una dinámica con consecuencias sociales en la estructura residencial del Gran Santiago.
+
 # 6. Bibliografía
+
+-   **AUSTRALIAN INSTITUTE OF HEALTH AND WELFARE.** *Home ownership and housing tenure.* Canberra: AIHW, 2023. <https://www.aihw.gov.au/reports/australias-welfare/home-ownership-and-housing-tenure>
+
+-   **INSTITUTO NACIONAL DE ESTADÍSTICAS (INE).** *Censo de Población y Vivienda 2017: Resultados Definitivos.* Santiago de Chile: INE, 2018. <https://www.ine.gob.cl/estadisticas/sociales/censos-de-poblacion-y-vivienda>
+
+-   **MINISTERIO DE DESARROLLO SOCIAL Y FAMILIA (MDSF).** *Encuesta de Caracterización Socioeconómica Nacional (CASEN) 2022: Base de Datos y Metodología.* Santiago de Chile: MDSF, 2023. <https://observatorio.ministeriodesarrollosocial.gob.cl/encuesta-casen>
+
+-   **RAGAN-KELLY, M. et al.** *rakeR: Spatial Microsimulation in R.* Comprehensive R Archive Network (CRAN), 2021. \
+    <https://cran.r-project.org/package=rakeR>
+
+-   **STANFORD UNIVERSITY.** *Generational Shifts in Age and Predictors of Homeownership.* Stanford Center on Longevity, 2018. <https://longevity.stanford.edu/new-map-of-life-2021/wp-content/uploads/sites/36/2018/06/Generational-Shifts-in-Age-and-Predictors-of-Homeownership-1.pdf>
+
+-   **WANG, H.; CHENG, Z.; et al.** *University education, homeownership and housing wealth.* *Education + Training*, 2022. <https://www.sciencedirect.com/science/article/abs/pii/S1043951X21001607>
+:::
