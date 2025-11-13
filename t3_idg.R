@@ -46,7 +46,8 @@ SELECT
   
   -- Promedio de personas por hogar en la zona
   ROUND(
-    AVG(v.cant_per)::numeric,
+    COUNT(*)::numeric
+    / NULLIF(COUNT(DISTINCT h.hogar_ref_id), 0),
     2) AS promedio_personas_por_hogar
 
 FROM public.personas   AS p
@@ -130,6 +131,142 @@ fviz_nbclust(vars_scaled, kmeans, method = "wss") +
 
 ## Ejecutar kmeans
 set.seed(123)
-km = kmeans(vars_scaled, centers = 5, nstart = 25)
+km = kmeans(vars_scaled, centers = 4, nstart = 25)
 
 zonas_gs_indicadores$cluster = as.factor(km$cluster)
+
+# Escolaridad 18+ v/s Ingreso
+ggplot(zonas_gs_indicadores,
+       aes(x = promedio_escolaridad_18mas,
+           y = mediana_ingreso,
+           color = cluster)) +
+  geom_point(size = 2) +
+  labs(
+    title = "Escolaridad (18+) v/s Ingreso",
+    x = "Promedio años de escolaridad (>= 18 años)",
+    y = "Mediana de ingreso",
+    color = "Cluster"
+  ) +
+  theme_minimal()
+
+# Tamaño de hogar v/s Ingreso
+ggplot(zonas_gs_indicadores,
+       aes(x = promedio_personas_por_hogar,
+           y = mediana_ingreso,
+           color = cluster)) +
+  geom_point(size = 2) +
+  labs(
+    title = "Tamaño del hogar v/s Ingreso",
+    x = "Promedio personas por hogar",
+    y = "Mediana de ingreso",
+    color = "Cluster"
+  ) +
+  theme_minimal()
+
+# Tenencia (diferencia) v/s Ingreso
+ggplot(zonas_gs_indicadores,
+       aes(x = diferencia,
+           y = mediana_ingreso,
+           color = cluster)) +
+  geom_point(size = 2) +
+  labs(
+    title = "Tenencia v/s Ingreso",
+    x = "Diferencia % arrendada - % propia",
+    y = "Mediana de ingreso",
+    color = "Cluster"
+  ) +
+  theme_minimal()
+
+# Tenencia v/s Escolaridad
+ggplot(zonas_gs_indicadores,
+       aes(x = diferencia,
+           y = promedio_escolaridad_18mas,
+           color = cluster)) +
+  geom_point(size = 2) +
+  labs(
+    title = "Tenencia v/s Escolaridad (18+)",
+    x = "Diferencia % arrendada - % propia",
+    y = "Promedio años de escolaridad (>= 18 años)",
+    color = "Cluster"
+  ) +
+  theme_minimal()
+
+##GG
+
+datos_pairs <- zonas_gs_indicadores %>%
+  st_drop_geometry() %>%
+  select(
+    diferencia,
+    mediana_ingreso,
+    promedio_escolaridad_18mas,
+    promedio_personas_por_hogar,
+    cluster
+  )
+
+ggpairs(
+  datos_pairs,
+  columns = 1:4,  # solo las numéricas
+  mapping = aes(color = cluster, alpha = 0.6)
+)
+
+
+# Se obtiene geometría comunal para Santiago
+sql_comunas = "
+SELECT cut, nom_comuna, geom
+FROM dpa.comunas_rm_shp
+WHERE nom_provin = 'SANTIAGO';
+"
+
+
+sf_comunas_santiago = st_read(con, query = sql_comunas)
+
+
+# bbox del área urbana / zona de interés
+bbox <- st_bbox(zonas_gs_indicadores)
+
+
+mapa_clusters <- ggplot() +
+  geom_sf(
+    data  = zonas_gs_indicadores,
+    aes(fill = cluster),
+    color = "white",
+    linewidth = 0.05
+  ) +
+  geom_sf(
+    data  = sf_comunas_santiago,
+    fill  = NA,
+    color = "grey20",
+    linewidth = 0.3
+  ) +
+  scale_fill_brewer(
+    palette = "Set2",
+    name    = "Cluster k-means"
+  ) +
+  coord_sf(
+    xlim   = c(bbox["xmin"], bbox["xmax"]),
+    ylim   = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.background  = element_rect(fill = "white", color = NA),
+    
+    # Grilla REAL para mapas sf
+    panel.grid.major = element_line(color = "grey85", linewidth = 0.3),
+    panel.grid.minor = element_line(color = "grey93", linewidth = 0.2),
+    
+    legend.position  = "right",
+    legend.title     = element_text(face = "bold"),
+    legend.text      = element_text(size = 8),
+    
+    plot.title       = element_text(face = "bold", hjust = 0.5, size = 12),
+    plot.subtitle    = element_text(hjust = 0.5, colour = "grey30", size = 9),
+    plot.caption     = element_text(colour = "grey50", size = 7, hjust = 1)
+  ) +
+  labs(
+    title    = "Clusters de zonas censales del Gran Santiago",
+    subtitle = "k-means basado en ingreso, escolaridad, tamaño del hogar y tenencia",
+    caption  = "Fuente: Censo 2017 (microdatos), elaboración propia"
+  )
+
+print(mapa_clusters)
