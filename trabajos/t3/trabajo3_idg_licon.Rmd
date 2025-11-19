@@ -38,6 +38,7 @@ Aplicar técnicas de agrupamiento k-means para clasificar las zonas censales del
 
 ## 3.1 Librerías
 
+::: {style="text-align: justify;"}
 Para la realización del trabajo se utilizó como entorno de programación R (versión 4.5.1), complementado con un conjunto de librerías que permiten la conexión a bases de datos, manipulación de datos espaciales, microsimulación y visualización estadística.
 
 ```{r librerias, echo=TRUE, message=FALSE, warning=FALSE}
@@ -235,17 +236,41 @@ vars_scaled = scale(vars_clusters)
 
 ## 3.3 Método del Codo
 
+Para determinar el número adecuado de clusters se aplicó el método del codo, utilizando como insumo las variables estandarizadas destinadas al agrupamiento:
+
+-   diferencia (tenencia)
+
+-   mediana de ingreso
+
+-   promedio de escolaridad (18+)
+
+-   promedio de personas por hogar
+
+El método consiste en calcular la suma de cuadrados intra-cluster (WSS) para distintos valores *k*,observando el punto en el que la reducción de la inercia comienza a decrecer de manera notoria.
+
+$$
+\text{WSS}(k) = \sum_{j=1}^{k} \sum_{x_i \in C_j} \lVert x_i - \mu_j \rVert^{2}
+$$
+
 ```{r metodo del codo, echo=TRUE, message=FALSE, warning=FALSE}
 fviz_nbclust(vars_scaled, kmeans, method = "wss") +
   labs(title = "Método del codo", x = "Número de clusters (k)", y = "WSS")
 ```
 
+De acuerdo con el resultado obtenido, el valor de *k* podría ser de 3 o 4. Al someter a prueba estos valores, se optó finalmente por generar 4 clusters, ya que generaba un mejor agrupamiento en gran parte de la ciudad.
+
 ## 3.4 Clustering
+
+Para agrupar las zonas censales según sus características, se aplicó el algoritmo k-means utilizando las variables anteriormente mencionadas y posteriormente estandarizadas.
+
+El algoritmo busca particionar las observaciones en *k* grupos de manera que cada zona quede asignada al cluster cuyo centroide sea el más cercano según distancia euclidiana. La partición seleccionada fue $k=4$, definida previamente mediante el método del codo.
 
 ```{r ejecutar k-means, echo=TRUE, message=FALSE, warning=FALSE}
 set.seed(123)
 km = kmeans(vars_scaled, centers = 4, nstart = 25)
 ```
+
+El parámetro `nstart = 25` especifica que el algoritmo se inicializa 25 veces con centroides aleatorios, reteniendo la solución con menor suma de cuadrados intra-cluster.
 
 ```{r clusterDF, message=FALSE, warning=FALSE, include=FALSE}
 zonas_gs_indicadores$cluster = as.factor(km$cluster)
@@ -256,6 +281,10 @@ zonas_gs_indicadores$cluster = as.factor(km$cluster)
 ## 4.1 Análisis Gráfico
 
 ### 4.1.1 Escolaridad vs Ingreso
+
+El gráfico muestra cuatro agrupaciones bien definidas en el plano escolaridad-ingreso. El patrón más evidente es la separación vertical por niveles de ingreso, donde el cluster 2 concentra prácticamente todos los valores altos de ingreso y también los valores altos de escolaridad. En contraste, el cluster 4 se concentra en la zona de menor ingreso y menor escolaridad, formando una nube claramente diferenciada del resto.
+
+Los cluster 1 y 3 aparecen en un rango intermedio, pero no se superponen totalmente: el cluster 3 ocupa un tramo más amplio de escolaridad, don una dispersión mayor en ingreso. Mientras que el cluster 1 se mantiene más acotado en ambos ejes.
 
 ```{r grafico1 esc vs ingreso, echo=FALSE, message=FALSE, warning=FALSE}
 ggplot(zonas_gs_indicadores,
@@ -274,6 +303,10 @@ ggplot(zonas_gs_indicadores,
 
 ### 4.1.2 Tamaño del hogar vs Ingreso
 
+La relación entre el promedio de personas por hogar y el ingreso presenta una separación que, en algunos casos, no resulta tan clara, donde nuevamente existe una tendencia vertical frente al ingreso. El cluster 2 vuelve a concentrase en los valores altos de ingreso y, al mismo tiempo, en los tamaños de hogar más bajos dentro del rango observado. En el extremo opuesto, el cluster 4 agrupa la mayoría de las zonas con ingresos bajos y una mayor variación en el tamaño del hogar, incluyendo algunos valores atípicos muy altos.
+
+Los cluster 1 y 3 se distribuyen en la parte inferior del gráfico, con tamaños de hogar similares, pero diferenciándose por nivel de ingreso. Es posible que la escala escogida para el promedio de personas por hogar no permita observar mejor las agrupaciones, ya que en general se encuentran en valores cercanos similares.
+
 ```{r grafico2 cantidad vs ingreso, echo=FALSE, message=FALSE, warning=FALSE}
 ggplot(zonas_gs_indicadores,
        aes(x = promedio_personas_por_hogar,
@@ -290,6 +323,12 @@ ggplot(zonas_gs_indicadores,
 ```
 
 ### 4.1.3 Tenencia vs Ingreso
+
+La variable de tenencia (diferencia arrendada - propia) muestra un comportamiento claramente segmentado según los clusters. El cluster 1 concentra valores positivos y altos, lo que indica que en estas zonas la proporción de viviendas arrendadas supera ampliamente a la de viviendas propias. Esta característica se combina con ingresos intermedios, formando un grupo que se distingue tanto por su posición horizontal como por su consistencia vertical.
+
+El tramo central cercano a cero esta dominado por el cluster 2, cuyas zonas combinan una tenencia más equilibrada con los ingresos más altos del conjunto. Este comportamiento sugiere que, dentro de esta combinación de variables, las zonas de mayor ingreso no se asocian a una predominancia marcada de arriendo o propiedad, sino de valores de tenencia más neutros.
+
+Los cluster 3 y 4 ocupan principalmente el tramo negativo de tenencia. Esto muestra que estas zonas la proporción de vivienda propia es mayor que la de arriendo. Dentro de este grupo, el cluster 3 se asocia a ingresos intermedios, mientras el cluster 4 concentra ingresos más bajos, lo que genera una distinción vertical entre ambos.
 
 ```{r grafico3 tenencia vs ingreso, echo=FALSE, message=FALSE, warning=FALSE}
 ggplot(zonas_gs_indicadores,
@@ -308,6 +347,12 @@ ggplot(zonas_gs_indicadores,
 
 ### 4.1.4 Tenencia vs Escolaridad
 
+La variable de tenencia vuelve a generar una separación horizontal clara entre los clusters. El cluster 1 se ubica en el extremo positivo, con valores de niveles de escolaridad moderados, lo que muestra que el predominio del arriendo en este grupo no está asociado a valores extremos de escolaridad.
+
+En el tramo central cercano a cero se concentra el cluster 2, que coincide con los valores más altos de escolaridad del conjunto. Su posición sugiere que las zonas con mayor escolaridad no se alinean con un patrón marcado de arriendo o propiedad, sino que se mantiene en valores más equilibrados.
+
+Los clusters 3 y 4 mantienen diferencia negativa, asociándose a zonas donde la proporción de vivienda propia es mayor. Entre ellos, la separación se produce principalmente en el eje vertical dado por los ingresos. Esta distinción indica que, aun compartiendo un patrón similar de tenencia, ambos grupos muestras distribuciones distintas de escolaridad.
+
 ```{r grafico4 tenencia vs esc, echo=FALSE, message=FALSE, warning=FALSE}
 ggplot(zonas_gs_indicadores,
        aes(x = diferencia,
@@ -324,6 +369,16 @@ ggplot(zonas_gs_indicadores,
 ```
 
 ## 4.2 Estadísticas Generales
+
+La matriz muestra correlaciones calculadas tanto para el conjunto completo como para cada cluster por separado. a nivel general, aparecen tres relaciones particularmente destacables:
+
+1.  Tenencia vs Personas por hogar (corr = -0,514): la correlación negativa indica que, en conjunto, las zonas con mayor predominio de vivienda propia tienden a presentar tamaños de hogar más alto. La magnitud de la correlación es una de las más fuertes.
+2.  Ingreso vs Personas por hogar (corr = -0,382): también negativa y relativamente fuerte, sugiere que los ingresos medianos más altos se asocian numéricamente con hogares de menor tamaño.
+3.  Escolaridad vs Personas por hogar (corr = -0,461): la relación negativa confirma que el aumento en los promedios de escolaridad se acompaña de una reducción del tamaño del hogar. Otras de las correlaciones generales de mayor magnitud.
+
+En cuanto a los patrones específicos por cluster, hay valores que llaman la atención por su magnitud o por diferenciarse del comportamiento general:
+
+-   En el cluster 1, la correlación entre ingreso y tenencia es notablemente más alta que en el total. Esto muestra que, dentro de este grupo, el ingreso sí juega un rol relevante en la variación de la variable microsimulada de tenencia. Dado que este cluster reúne zonas con ingresos bajos y predominio del arriendo, la relación más intensa entre ambas variables sugiere que en este segmento particular el nivel de ingreso está mucho más vinculado a la estructura de tenencia que en el resto del conjunto.
 
 ```{r estadisticas generales, echo=FALSE, message=FALSE, warning=FALSE}
 datos_pairs <- zonas_gs_indicadores %>%
@@ -407,6 +462,8 @@ mapa_clusters <- ggplot() +
 print(mapa_clusters)
 ```
 
+El mapa muestra la distribución espacial de los cuatro clusters obtenidos mediante k-means, aplicados únicamente sobre las variables de estudio. Es posible observar que existe una tendencia en cuanto a la distribución de los clusters. Para el cluster 1, se tiene que se concentra en la zona central del Gran Santiago, lo que en cuanto a la microsimulación realizada para la tenencia, se había observado que en este sector se daba la mayor proporción de arriendo, lo que podría ser un factor clave al realizar el cluster. En cuanto al resto, sigue una tendencia progresiva en torno al centro, distribuyéndose similar a la microsimulación, pero en este caso aparece una zona especial con el cluster 2, que se diferencia del resto. Esta zona corresponde al sector oriente de la capital, el cual es asociado a sectores de mayores ingresos.
+
 ```{r tabla clusters, echo=FALSE, message=FALSE, warning=FALSE}
 tabla_clusters <- zonas_gs_indicadores %>%
   st_drop_geometry() %>%      
@@ -454,7 +511,27 @@ ggplot(tabla_long, aes(x = variable, y = factor(cluster), fill = valor)) +
   )
 ```
 
+A partir de la información presentada en la tabla se han clasificado los clusters de la siguiente manera:
+
+a) Cluster 1: "Zonas urbanas de clase media profesional con alta presencia de arriendo"
+
+Este grupo reúne las zonas de ingresos medios y elevados niveles educativos, pero con una característica distintiva en cuanto al dominio de arriendo como forma de ocupación de vivienda. Corresponde a sectores densos, centrales y bien conectados de la ciudad, en el caso particular de la cartografía obtenida, comunas como Santiago Centro e Independencia.
+
+b) Cluster 2: "Zonas de élite socioeconómica de alta consolidación"
+
+Este grupo concentra las zonas con valores más altos de ingreso y escolaridad del conjunto metropolitano. Corresponde territorialmente a los sectores del oriente metropolitano: Providencia, Ñuñoa, Vitacura y Las Condes.
+
+c) Cluster 3: "Zonas residenciales de clase media con estructuras familiares mayores"
+
+Este caso refleja las zonas de ingreso medio-bajo, con escolaridad moderada y un tamaño de hogar relativamente más elevado. La vivienda propia predomina, aunque no de manera tan marcada como en el cluster 4. Se asocia a territorios de clase media familiar. No hay comunas marcadas con este cluster, sino que se asocia a barrios o sectores dentro de las comunas.
+
+d) Cluster 4: "Zonas populares tradicionales de baja renta y hogares grandes"
+
+Este corresponde al grupo de menor nivel socioeconómico del conjunto. Si bien se distribuye similar al cluster 3 en el territorio, hay una leve tendencia donde el cluster 4 aparece más que el cluster 3 en el sector poniente del área metropolitana.
+
 ## 4.4 Índice de Shannon
+
+El índice de Shannon se utilizó para medir cuán diversa es la composición de clusters dentro de cada comuna. Su valor aumenta cuando una comuna contiene varios clusters con proporciones similares entre sí, y disminuye cuando la presencia de clusters es más homogénea o dominada por uno solo.
 
 ```{r cartografia2 shannon, echo=FALSE, message=FALSE, warning=FALSE}
 sql_comunas = "
@@ -543,6 +620,19 @@ mapa_shannon <- ggplot(sf_comunas_shannon) +
 print(mapa_shannon)
 ```
 
+En el mapa, se observan comuna con valores relativamente altos del índice, lo que indica una distribución más equilibrada de los distintos clusters en ella. En contraste, las comunas con valores más bajos presentan una estructura interna más uniforme. Algunos valores del índice pueden estar sesgados ya que en la comuna existía presencia de un solo cluster.
+
 # 5. Conclusiones
 
+El análisis permitió identificar cuatro clusters con perfiles numéricos claramente diferenciados a partir de la variable de tenencia microsimulada y de los indicadores censales utilizados. La segmentación obtenida mostró coherencia interna y evidenció que las combinaciones de ingreso, escolaridad, tamaño del hogar y tenencia generan estructuras estables dentro del conjunto de zonas censales.
+
+La comparación entre correlaciones generales y por cluster reveló que algunas relaciones como ingreso y tenencia, o escolaridad y tamaño del hogar, adquieren comportamientos distintos según el grupo, lo que confirma la existencia de patrones heterogéneos que no se observan al analizar el total de zonas como un único conjunto. La cartografía y el índice de Shannon complementaron este resultado al mostrar cómo estos patrones se distribuyen y mezclan dentro de los límites comunales.
+
+El valor del estudio radica en que la metodología utilizada ofrece una base operativa para agrupar zonas con comportamientos similares, lo que puede resultar útil en distintos ámbitos de trabajo. La clasificación obtenida podría emplearse en tareas de segmentación territorial previa a estudios urbanos, en diagnósticos que requieran identificar áreas con perfiles sociohabitacionales comparables, o en la focalización inicial de intervenciones públicas o privadas, donde se necesite distinguir zonas con características homogéneas antes de aplicar análisis más detallados. Asimismo, los clusters pueden servir como unidades de análisis intermedio para investigaciones que busquen simplificar la heterogeneidad del territorio sin recurrir a divisiones administrativas tradicionales.
+
 # 6. Referencias
+
+Centro de Estudios MINVU. (2022). *Informe de Mercado de Suelo Urbano y Vivienda: Región Metropolitana*. Ministerio de Vivienda y Urbanismo, Gobierno de Chile.
+
+Fuentes, L., & Hernández, A. (2021). *Transformaciones del mercado del arriendo y nuevas dinámicas residenciales en Santiago de Chile*. Instituto de Estudios Urbanos y Territoriales, Pontificia Universidad Católica de Chile.
+:::
